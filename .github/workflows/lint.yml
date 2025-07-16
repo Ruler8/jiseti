@@ -3,10 +3,10 @@ name: Lint and Test
 on:
   push:
     branches:
-      - main
+      - dennis
   pull_request:
     branches:
-      - main
+      - dennis
 
 permissions:
   pull_request: write
