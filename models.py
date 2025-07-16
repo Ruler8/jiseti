@@ -12,7 +12,7 @@ class User(db.Model):
     password = db.Column(db.String(100), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
 
-    records = db.relationship('Record', backref='user', lazy=True)
+    records = db.relationship('Record', backref='user', lazy=True, cascade="all, delete-orphan")
 
 class Record(db.Model):
     __tablename__ = 'records'
@@ -26,6 +26,8 @@ class Record(db.Model):
     longitude = db.Column(db.Float)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    media = db.relationship("Media", backref="record", cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
@@ -38,3 +40,20 @@ class Record(db.Model):
             "longitude": self.longitude,
             "user_id": self.user_id
         }
+    
+    class Media(db.Model):
+         __tablename__ = 'media'
+    id = db.Column(db.Integer, primary_key=True)
+    image_url = db.Column(db.String, nullable=True)
+    video_url = db.Column(db.String, nullable=True)
+    record_id = db.Column(db.Integer, db.ForeignKey("record.id"), nullable=False)
+    
+    def to_dict(self):
+        {
+  "id": self.id,
+  "image_url": self.image_url,
+  "video_url": self.video_url,
+  "record_id": self.record_id
+}
+
+
