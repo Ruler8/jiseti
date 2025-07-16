@@ -3,19 +3,30 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-class User(db.Model):
-    __tablename__ = 'users'
+class NormalUser(db.Model):
+    __tablename__ = 'normal_users'
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
-    role = db.Column(db.String(10), nullable=False, default='user')  
 
-    records = db.relationship('Record', backref='user', lazy=True, cascade="all, delete-orphan")
+    records = db.relationship('Record', backref='normal_user', lazy=True, cascade="all, delete-orphan")
 
-    def is_admin(self):
-        return self.role == 'admin'
+    def __repr__(self):
+        return f"<NormalUser {self.name}>"
+
+class Administrator(db.Model):
+    __tablename__ = 'administrators'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(100), nullable=False)
+    admin_number = db.Column(db.String(50), unique=True, nullable=False)
+
+    def __repr__(self):
+        return f"<Administrator {self.name}, AdminNumber={self.admin_number}>"
 
 class Record(db.Model):
     __tablename__ = 'records'
@@ -29,7 +40,9 @@ class Record(db.Model):
     longitude = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Link only to normal users
+    normal_user_id = db.Column(db.Integer, db.ForeignKey('normal_users.id'), nullable=False)
+
     media = db.relationship("Media", backref="record", cascade="all, delete-orphan")
 
     def to_dict(self):
@@ -41,7 +54,7 @@ class Record(db.Model):
             "status": self.status,
             "latitude": self.latitude,
             "longitude": self.longitude,
-            "user_id": self.user_id,
+            "normal_user_id": self.normal_user_id,
             "created_at": self.created_at.isoformat(),
             "media": [m.to_dict() for m in self.media]
         }

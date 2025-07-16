@@ -1,6 +1,6 @@
 from flask import request, jsonify, make_response
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from models import db, User, Record, Media
+from models import db, NormalUser, Administrator, Record, Media
 
 def register_routes(app):
 
@@ -11,42 +11,70 @@ def register_routes(app):
     @app.route('/signup', methods=['POST'])
     def signup():
         data = request.get_json()
-        if User.query.filter_by(email=data['email']).first():
-            return make_response({'error': 'Email already registered'}, 400)
+        role = data.get('role', 'user')
 
-        new_user = User(
-            name=data['name'],
-            email=data['email'],
-            password=data['password'],
-            role=data.get('role', 'user')
-        )
-        db.session.add(new_user)
-        db.session.commit()
-        return make_response({'message': 'User created'}, 201)
+        # Handle admin signup
+        if role == 'admin':
+            if Administrator.query.filter_by(email=data['email']).first():
+                return make_response({'error': 'Email already registered as admin'}, 400)
+            new_admin = Administrator(
+                name=data['name'],
+                email=data['email'],
+                password=data['password'],
+                admin_number=data['admin_number']
+            )
+            db.session.add(new_admin)
+            db.session.commit()
+            return make_response({'message': 'Administrator account created'}, 201)
+
+        # Handle normal user signup
+        else:
+            if NormalUser.query.filter_by(email=data['email']).first():
+                return make_response({'error': 'Email already registered'}, 400)
+            new_user = NormalUser(
+                name=data['name'],
+                email=data['email'],
+                password=data['password']
+            )
+            db.session.add(new_user)
+            db.session.commit()
+            return make_response({'message': 'User account created'}, 201)
 
     @app.route('/login', methods=['POST'])
     def login():
         data = request.get_json()
-        user = User.query.filter_by(email=data['email'], password=data['password']).first()
+        role = data.get('role', 'user')
+
+        if role == 'admin':
+            user = Administrator.query.filter_by(email=data['email'], password=data['password']).first()
+        else:
+            user = NormalUser.query.filter_by(email=data['email'], password=data['password']).first()
+
         if not user:
             return make_response({'error': 'Invalid credentials'}, 401)
 
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(identity={'id': user.id, 'role': role})
         return make_response({'access_token': access_token}, 200)
 
-    @app.route('/users')
+    @app.route('/normal_users')
     @jwt_required()
-    def list_users():
-        users = User.query.all()
+    def list_normal_users():
+        identity = get_jwt_identity()
+        if identity['role'] != 'admin':
+            return make_response({'error': 'Unauthorized'}, 403)
+        users = NormalUser.query.all()
         return make_response([
-            {'id': u.id, 'name': u.name, 'email': u.email, 'role': u.role}
+            {'id': u.id, 'name': u.name, 'email': u.email}
             for u in users
         ], 200)
 
     @app.route('/records', methods=['POST'])
     @jwt_required()
     def create_record():
-        user_id = get_jwt_identity()
+        identity = get_jwt_identity()
+        if identity['role'] != 'user':
+            return make_response({'error': 'Only normal users can create records'}, 403)
+
         data = request.get_json()
         record = Record(
             type=data['type'],
@@ -54,7 +82,7 @@ def register_routes(app):
             description=data['description'],
             latitude=data.get('latitude'),
             longitude=data.get('longitude'),
-            user_id=user_id
+            normal_user_id=identity['id']
         )
         db.session.add(record)
         db.session.commit()
@@ -69,9 +97,12 @@ def register_routes(app):
     @app.route('/records/<int:id>', methods=['PATCH'])
     @jwt_required()
     def edit_record(id):
-        user_id = get_jwt_identity()
+        identity = get_jwt_identity()
+        if identity['role'] != 'user':
+            return make_response({'error': 'Unauthorized'}, 403)
+
         record = Record.query.get_or_404(id)
-        if record.user_id != user_id:
+        if record.normal_user_id != identity['id']:
             return make_response({'error': 'Unauthorized'}, 403)
         if record.status != 'draft':
             return make_response({'error': 'Cannot edit finalized record'}, 403)
@@ -87,12 +118,16 @@ def register_routes(app):
     @app.route('/records/<int:id>', methods=['DELETE'])
     @jwt_required()
     def delete_record(id):
-        user_id = get_jwt_identity()
+        identity = get_jwt_identity()
+        if identity['role'] != 'user':
+            return make_response({'error': 'Unauthorized'}, 403)
+
         record = Record.query.get_or_404(id)
-        if record.user_id != user_id:
+        if record.normal_user_id != identity['id']:
             return make_response({'error': 'Unauthorized'}, 403)
         if record.status != 'draft':
             return make_response({'error': 'Cannot delete finalized record'}, 403)
+
         db.session.delete(record)
         db.session.commit()
         return make_response({'message': 'Record deleted'}, 200)
@@ -100,9 +135,8 @@ def register_routes(app):
     @app.route('/records/<int:id>/status', methods=['PATCH'])
     @jwt_required()
     def update_status(id):
-        admin_id = get_jwt_identity()
-        admin_user = User.query.get(admin_id)
-        if not admin_user or admin_user.role != 'admin':
+        identity = get_jwt_identity()
+        if identity['role'] != 'admin':
             return make_response({'error': 'Only admins can change record status'}, 403)
 
         record = Record.query.get_or_404(id)
@@ -118,9 +152,12 @@ def register_routes(app):
     @app.route('/records/<int:id>/media', methods=['POST'])
     @jwt_required()
     def add_media(id):
-        user_id = get_jwt_identity()
+        identity = get_jwt_identity()
+        if identity['role'] != 'user':
+            return make_response({'error': 'Unauthorized'}, 403)
+
         record = Record.query.get_or_404(id)
-        if record.user_id != user_id:
+        if record.normal_user_id != identity['id']:
             return make_response({'error': 'Unauthorized'}, 403)
         if record.status != 'draft':
             return make_response({'error': 'Cannot add media to finalized record'}, 403)
