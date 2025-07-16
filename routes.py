@@ -1,5 +1,5 @@
 from flask import request, jsonify, make_response
-from models import db, User, Record
+from models import db, User, Record, Media
 
 def register_routes(app):
 
@@ -16,7 +16,8 @@ def register_routes(app):
         new_user = User(
             name=data['name'],
             email=data['email'],
-            password=data['password']  # Plaintext (only for demo)
+            password=data['password'],  # Note: Plaintext for demo only
+            role=data.get('role', 'user')
         )
         db.session.add(new_user)
         db.session.commit()
@@ -25,10 +26,10 @@ def register_routes(app):
     @app.route('/users')
     def list_users():
         users = User.query.all()
-        return make_response(
-            [{'id': u.id, 'name': u.name, 'email': u.email} for u in users],
-            200
-        )
+        return make_response([
+            {'id': u.id, 'name': u.name, 'email': u.email, 'role': u.role}
+            for u in users
+        ], 200)
 
     @app.route('/records', methods=['POST'])
     def create_record():
@@ -77,11 +78,31 @@ def register_routes(app):
     def update_status(id):
         record = Record.query.get_or_404(id)
         data = request.get_json()
-        new_status = data.get('status')
+        user = User.query.get(data.get('admin_id'))
 
+        if not user or not user.is_admin():
+            return make_response({'error': 'Only admins can change record status'}, 403)
+
+        new_status = data.get('status')
         if new_status not in ['under investigation', 'rejected', 'resolved']:
             return make_response({'error': 'Invalid status'}, 400)
 
         record.status = new_status
         db.session.commit()
         return make_response({'message': f'Status updated to {new_status}'}, 200)
+
+    @app.route('/records/<int:id>/media', methods=['POST'])
+    def add_media(id):
+        record = Record.query.get_or_404(id)
+        if record.status != 'draft':
+            return make_response({'error': 'Cannot add media to finalized record'}, 403)
+
+        data = request.get_json()
+        new_media = Media(
+            image_url=data.get('image_url'),
+            video_url=data.get('video_url'),
+            record_id=id
+        )
+        db.session.add(new_media)
+        db.session.commit()
+        return make_response({'message': 'Media added'}, 201)
