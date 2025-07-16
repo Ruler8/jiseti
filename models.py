@@ -32,15 +32,14 @@ class Record(db.Model):
     __tablename__ = 'records'
 
     id = db.Column(db.Integer, primary_key=True)
-    type = db.Column(db.String(20), nullable=False)  
+    type = db.Column(db.String(20), nullable=False)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(50), default="draft")  
+    status = db.Column(db.String(50), default="draft")
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Link only to normal users
     normal_user_id = db.Column(db.Integer, db.ForeignKey('normal_users.id'), nullable=False)
 
     media = db.relationship("Media", backref="record", cascade="all, delete-orphan")
