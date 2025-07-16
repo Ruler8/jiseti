@@ -10,7 +10,7 @@ class User(db.Model):
     name = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
-    role = db.Column(db.String(10), nullable=False, default='user')  # 'user' or 'admin'
+    role = db.Column(db.String(10), nullable=False, default='user')  
 
     records = db.relationship('Record', backref='user', lazy=True, cascade="all, delete-orphan")
 
@@ -21,10 +21,10 @@ class Record(db.Model):
     __tablename__ = 'records'
 
     id = db.Column(db.Integer, primary_key=True)
-    type = db.Column(db.String(20), nullable=False)  # 'red-flag' or 'intervention'
+    type = db.Column(db.String(20), nullable=False)  
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(50), default="draft")  # 'draft', 'under investigation', 'rejected', 'resolved'
+    status = db.Column(db.String(50), default="draft")  
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
