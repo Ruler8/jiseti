@@ -13,7 +13,6 @@ def register_routes(app):
         data = request.get_json()
         role = data.get('role', 'user')
 
-        # Handle admin signup
         if role == 'admin':
             if Administrator.query.filter_by(email=data['email']).first():
                 return make_response({'error': 'Email already registered as admin'}, 400)
@@ -26,8 +25,6 @@ def register_routes(app):
             db.session.add(new_admin)
             db.session.commit()
             return make_response({'message': 'Administrator account created'}, 201)
-
-        # Handle normal user signup
         else:
             if NormalUser.query.filter_by(email=data['email']).first():
                 return make_response({'error': 'Email already registered'}, 400)
@@ -91,8 +88,15 @@ def register_routes(app):
     @app.route('/records')
     @jwt_required()
     def list_records():
-        records = Record.query.all()
-        return make_response([rec.to_dict() for rec in records], 200)
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        records = Record.query.paginate(page=page, per_page=per_page, error_out=False)
+        return make_response({
+            'records': [rec.to_dict() for rec in records.items],
+            'total': records.total,
+            'page': records.page,
+            'pages': records.pages
+        }, 200)
 
     @app.route('/records/<int:id>', methods=['PATCH'])
     @jwt_required()

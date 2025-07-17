@@ -40,7 +40,6 @@ class Record(db.Model):
     longitude = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Link only to normal users
     normal_user_id = db.Column(db.Integer, db.ForeignKey('normal_users.id'), nullable=False)
 
     media = db.relationship("Media", backref="record", cascade="all, delete-orphan")
