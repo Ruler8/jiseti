@@ -13,12 +13,7 @@ def register_routes(app):
         data = request.get_json()
         role = data.get('role', 'user')
 
-        if not all(k in data for k in ('name', 'email', 'password')):
-            return make_response({'error': 'Missing required fields'}, 400)
-
         if role == 'admin':
-            if 'admin_number' not in data:
-                return make_response({'error': 'Missing admin number'}, 400)
             if Administrator.query.filter_by(email=data['email']).first():
                 return make_response({'error': 'Email already registered as admin'}, 400)
             new_admin = Administrator(
@@ -30,7 +25,6 @@ def register_routes(app):
             db.session.add(new_admin)
             db.session.commit()
             return make_response({'message': 'Administrator account created'}, 201)
-
         else:
             if NormalUser.query.filter_by(email=data['email']).first():
                 return make_response({'error': 'Email already registered'}, 400)
@@ -47,16 +41,11 @@ def register_routes(app):
     def login():
         data = request.get_json()
         role = data.get('role', 'user')
-        email = data.get('email')
-        password = data.get('password')
-
-        if not email or not password:
-            return make_response({'error': 'Email and password are required'}, 400)
 
         if role == 'admin':
-            user = Administrator.query.filter_by(email=email, password=password).first()
+            user = Administrator.query.filter_by(email=data['email'], password=data['password']).first()
         else:
-            user = NormalUser.query.filter_by(email=email, password=password).first()
+            user = NormalUser.query.filter_by(email=data['email'], password=data['password']).first()
 
         if not user:
             return make_response({'error': 'Invalid credentials'}, 401)
@@ -84,11 +73,6 @@ def register_routes(app):
             return make_response({'error': 'Only normal users can create records'}, 403)
 
         data = request.get_json()
-        required_fields = ['type', 'title', 'description']
-        for field in required_fields:
-            if field not in data or not isinstance(data[field], str):
-                return make_response({'error': f"{field} must be a non-empty string"}, 400)
-
         record = Record(
             type=data['type'],
             title=data['title'],
@@ -104,16 +88,25 @@ def register_routes(app):
     @app.route('/records')
     @jwt_required()
     def list_records():
-        records = Record.query.all()
-        return make_response([rec.to_dict() for rec in records], 200)
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        records = Record.query.paginate(page=page, per_page=per_page, error_out=False)
+        return make_response({
+            'records': [rec.to_dict() for rec in records.items],
+            'total': records.total,
+            'page': records.page,
+            'pages': records.pages
+        }, 200)
 
     @app.route('/records/<int:id>', methods=['PATCH'])
     @jwt_required()
     def edit_record(id):
         identity = get_jwt_identity()
-        record = Record.query.get_or_404(id)
+        if identity['role'] != 'user':
+            return make_response({'error': 'Unauthorized'}, 403)
 
-        if identity['role'] != 'user' or record.normal_user_id != identity['id']:
+        record = Record.query.get_or_404(id)
+        if record.normal_user_id != identity['id']:
             return make_response({'error': 'Unauthorized'}, 403)
         if record.status != 'draft':
             return make_response({'error': 'Cannot edit finalized record'}, 403)
@@ -130,9 +123,11 @@ def register_routes(app):
     @jwt_required()
     def delete_record(id):
         identity = get_jwt_identity()
-        record = Record.query.get_or_404(id)
+        if identity['role'] != 'user':
+            return make_response({'error': 'Unauthorized'}, 403)
 
-        if identity['role'] != 'user' or record.normal_user_id != identity['id']:
+        record = Record.query.get_or_404(id)
+        if record.normal_user_id != identity['id']:
             return make_response({'error': 'Unauthorized'}, 403)
         if record.status != 'draft':
             return make_response({'error': 'Cannot delete finalized record'}, 403)
@@ -151,7 +146,6 @@ def register_routes(app):
         record = Record.query.get_or_404(id)
         data = request.get_json()
         new_status = data.get('status')
-
         if new_status not in ['under investigation', 'rejected', 'resolved']:
             return make_response({'error': 'Invalid status'}, 400)
 
@@ -163,9 +157,11 @@ def register_routes(app):
     @jwt_required()
     def add_media(id):
         identity = get_jwt_identity()
-        record = Record.query.get_or_404(id)
+        if identity['role'] != 'user':
+            return make_response({'error': 'Unauthorized'}, 403)
 
-        if identity['role'] != 'user' or record.normal_user_id != identity['id']:
+        record = Record.query.get_or_404(id)
+        if record.normal_user_id != identity['id']:
             return make_response({'error': 'Unauthorized'}, 403)
         if record.status != 'draft':
             return make_response({'error': 'Cannot add media to finalized record'}, 403)
