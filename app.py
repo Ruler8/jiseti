@@ -8,12 +8,11 @@ import os
 from models import db
 from routes import register_routes
 
-# Load environment variables from .env
+
 load_dotenv()
 
 app = Flask(__name__)
 
-# Use environment variables for configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
